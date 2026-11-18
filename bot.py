@@ -1,4 +1,7 @@
 import os
+from fastapi import FastAPI
+import uvicorn
+from threading import Thread
 import logging
 import requests
 from telegram import Update
@@ -7,6 +10,15 @@ from pydantic import BaseModel, Field
 from openai import OpenAI
 
 # 1. Configuration & Logging
+app = FastAPI()
+
+@app.get("/")
+def health_check():
+    return {"status": "VampieePropertyBot is running!"}
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -85,11 +97,13 @@ async def handle_property_message(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text("❌ Failed to parse or sync this property listing.")
 
 # 5. Main Application Runner
-def main():
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_property_message))
-    logger.info("🤖 VampieePropertyBot is running...")
-    app.run_polling()
-
 if __name__ == "__main__":
-    main()
+    # Start FastAPI in a background thread so Render port health check passes
+    web_thread = Thread(target=run_web, daemon=True)
+    web_thread.start()
+
+    # Build and start your Telegram bot polling loop
+    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_property_message))
+    logger.info("🤖 VampieePropertyBot is running...")
+    application.run_polling()
